@@ -39,15 +39,23 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').then(
-                    function(registration) {
-                      console.log('ServiceWorker registration successful');
-                    },
-                    function(err) {
-                      console.log('ServiceWorker registration failed: ', err);
+                window.addEventListener('load', async function() {
+                  try {
+                    const registration = await navigator.serviceWorker.register('/sw.js');
+                    console.log('ServiceWorker registration successful with scope:', registration.scope);
+                    
+                    // Check if push notifications are supported
+                    if ('PushManager' in window) {
+                      const permission = await Notification.requestPermission();
+                      if (permission === 'granted') {
+                        console.log('Push notifications are supported and permission granted');
+                      } else {
+                        console.log('Push notifications permission:', permission);
+                      }
                     }
-                  );
+                  } catch (err) {
+                    console.error('ServiceWorker registration failed:', err);
+                  }
                 });
               }
             `,

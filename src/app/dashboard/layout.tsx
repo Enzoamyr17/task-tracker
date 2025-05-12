@@ -220,6 +220,14 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                   >
                     History
                   </a>
+                  <a 
+                    href="/dashboard/settings" 
+                    className={`px-4 py-2 rounded font-semibold ${
+                      pathname === '/dashboard/settings' ? 'bg-blue-500 text-white' : ''
+                    }`}
+                  >
+                    Settings
+                  </a>
                 </div>
               </div>
 

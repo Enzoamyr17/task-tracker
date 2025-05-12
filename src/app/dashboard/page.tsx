@@ -4,6 +4,8 @@ import { useState, useEffect, useContext } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SidebarContext } from './layout';
+import NotificationSettings from '@/components/NotificationSettings';
+import { formatDate, formatDateOnly, getCurrentDateTime, isOverdue, isDueToday } from '@/utils/date';
 
 interface Task {
   id: string;
@@ -48,7 +50,7 @@ export default function DashboardPage() {
   const [newTask, setNewTask] = useState<NewTask>({
     task: '',
     description: '',
-    due_date: getCurrentDate(),
+    due_date: `${getCurrentDateTime()}T23:59`,
     project_id: null,
     priority: 'medium',
     is_completed: false
@@ -59,6 +61,7 @@ export default function DashboardPage() {
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [hasSelectedTime, setHasSelectedTime] = useState(false);
 
   const supabase = createClient();
 
@@ -222,16 +225,16 @@ export default function DashboardPage() {
         throw new Error('No user found');
       }
 
-      console.log('Adding task for user:', user.id);
+      // Ensure due_date has 23:59 if no time is specified
+      const taskToSubmit = {
+        ...newTask,
+        due_date: newTask.due_date?.includes('T') ? newTask.due_date : `${newTask.due_date}T23:59`,
+        user_id: user.id
+      };
 
       const { data, error: insertError } = await supabase
         .from('tasks')
-        .insert([
-          {
-            ...newTask,
-            user_id: user.id
-          }
-        ])
+        .insert([taskToSubmit])
         .select();
 
       if (insertError) {
@@ -244,11 +247,12 @@ export default function DashboardPage() {
       setNewTask({ 
         task: '', 
         description: '', 
-        due_date: getCurrentDate(),
+        due_date: `${getCurrentDate()}T23:59`,
         project_id: null,
         priority: 'medium',
         is_completed: false
       });
+      setHasSelectedTime(false);
       
       // Refresh tasks immediately after adding
       await fetchTasks();
@@ -314,12 +318,9 @@ export default function DashboardPage() {
         return acc;
       }
 
-      const taskDate = new Date(task.due_date);
-      taskDate.setHours(0, 0, 0, 0);
-
-      if (taskDate < today) {
+      if (isOverdue(task.due_date)) {
         acc.overdue.push(task);
-      } else if (taskDate.getTime() === today.getTime()) {
+      } else if (isDueToday(task.due_date)) {
         acc.today.push(task);
       } else {
         acc.upcoming.push(task);
@@ -354,15 +355,10 @@ export default function DashboardPage() {
 
     return (
       <div 
-        className={`bg-white rounded-lg p-4 shadow-sm mb-3 border border-zinc-200 h-auto max-h-[140px] flex flex-col cursor-pointer hover:shadow-md transition-all duration-300 ${
-          isCompleting ? 'opacity-0 -translate-x-full scale-95' : 'opacity-100 translate-x-0 scale-100'
-        }`}
-        onClick={(e) => {
-          // Only open modal if the click wasn't on the checkbox
-          if (!(e.target as HTMLElement).closest('input[type="checkbox"]')) {
-            setSelectedTask(task);
-            setIsViewModalOpen(true);
-          }
+        className="bg-white rounded-lg p-4 shadow-sm border border-zinc-200 hover:shadow-md transition-shadow cursor-pointer"
+        onClick={() => {
+          setSelectedTask(task);
+          setIsViewModalOpen(true);
         }}
       >
         <div className="flex justify-between items-start mb-2 min-w-0">
@@ -372,6 +368,7 @@ export default function DashboardPage() {
               checked={task.is_completed}
               onChange={handleComplete}
               className="w-4 h-4 text-blue-600 border-zinc-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
+              onClick={(e) => e.stopPropagation()}
             />
             <h4 className={`font-semibold text-zinc-800 truncate transition-colors duration-300 ${
               isCompleting ? 'text-green-600' : ''
@@ -392,7 +389,14 @@ export default function DashboardPage() {
         )}
         {task.due_date && (
           <div className="text-xs text-zinc-500 mt-auto">
-            Due: {new Date(task.due_date).toLocaleDateString()}
+            Due: {new Date(task.due_date).toLocaleString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true
+            })}
           </div>
         )}
       </div>
@@ -403,10 +407,13 @@ export default function DashboardPage() {
     if (editedTask) {
       try {
         setError(null);
+        // If the date doesn't have a time component, keep it as date-only
+        const dueDate = editedTask.due_date?.length === 10 ? editedTask.due_date : editedTask.due_date;
+        
         const { error: updateError } = await supabase
           .from('tasks')
           .update({
-            due_date: editedTask.due_date,
+            due_date: dueDate,
             priority: editedTask.priority
           })
           .eq('id', editedTask.id);
@@ -417,7 +424,7 @@ export default function DashboardPage() {
 
         // Update the task in the local state
         setTasks(tasks.map(task => 
-          task.id === editedTask.id ? editedTask : task
+          task.id === editedTask.id ? { ...task, due_date: dueDate } : task
         ));
       } catch (err) {
         console.error('Error updating task:', err);
@@ -490,7 +497,7 @@ export default function DashboardPage() {
               setNewTask({
                 task: '',
                 description: '',
-                due_date: getCurrentDate(),
+                due_date: `${getCurrentDate()}T23:59`,
                 project_id: projectId || null,
                 priority: 'medium',
                 is_completed: false
@@ -549,16 +556,41 @@ export default function DashboardPage() {
                 />
               </div>
               <div>
-                <label htmlFor="due_date" className="block text-sm font-medium text-zinc-700 mb-1">
-                  Due Date
-                </label>
-                <input
-                  type="date"
-                  id="due_date"
-                  value={newTask.due_date || ''}
-                  onChange={(e) => setNewTask({ ...newTask, due_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <div className="flex gap-2">
+                  <div className="m-auto w-1/2">
+                    <label htmlFor="due_date" className="block text-sm font-medium text-zinc-700 mb-1">
+                      Due Date
+                    </label>
+                    <input
+                      type="date"
+                      id="due_date"
+                      value={newTask.due_date ? newTask.due_date.slice(0, 10) : getCurrentDate()}
+                      onChange={(e) => {
+                        const dateValue = e.target.value;
+                        setNewTask({ ...newTask, due_date: `${dateValue}T23:59` });
+                      }}
+                      className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="m-auto w-1/2">
+                    <label htmlFor="due_time" className="block text-sm font-medium text-zinc-700 mb-1">
+                      Due Time (Optional)
+                    </label>
+                    <input
+                      type="time"
+                      id="due_time"
+                      value={hasSelectedTime ? newTask.due_date?.slice(11, 16) : ''}
+                      onChange={(e) => {
+                        const timeValue = e.target.value;
+                        const dateValue = newTask.due_date?.slice(0, 10) || getCurrentDate();
+                        setNewTask({ ...newTask, due_date: `${dateValue}T${timeValue || '23:59'}` });
+                        setHasSelectedTime(!!timeValue);
+                      }}
+                      className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                
               </div>
               <div>
                 <label htmlFor="priority" className="block text-sm font-medium text-zinc-700 mb-1">
@@ -624,7 +656,11 @@ export default function DashboardPage() {
       {isViewModalOpen && selectedTask && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-          onClick={handleModalClose}
+          onClick={() => {
+            setIsViewModalOpen(false);
+            setSelectedTask(null);
+            setEditedTask(null);
+          }}
         >
           <div 
             className="bg-white rounded-lg p-6 w-full max-w-md"
@@ -646,7 +682,11 @@ export default function DashboardPage() {
                   </svg>
                 </button>
                 <button 
-                  onClick={handleModalClose}
+                  onClick={() => {
+                    setIsViewModalOpen(false);
+                    setSelectedTask(null);
+                    setEditedTask(null);
+                  }}
                   className="text-zinc-500 hover:text-zinc-700"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -682,17 +722,35 @@ export default function DashboardPage() {
               <div className="flex items-center gap-4 text-sm text-zinc-600">
                 <div className='m-auto'>
                   <span className="font-medium text-zinc-700">Created: </span>
-                  {new Date(selectedTask.date_created).toLocaleDateString()}
+                  {formatDate(selectedTask.date_created)}
                 </div>
                 <div className='m-auto'>
                   <label htmlFor="due_date" className="font-medium text-zinc-700">Due: </label>
-                  <input
-                    type="date"
-                    id="due_date"
-                    value={editedTask?.due_date || selectedTask.due_date || ''}
-                    onChange={(e) => setEditedTask(prev => prev ? {...prev, due_date: e.target.value} : {...selectedTask, due_date: e.target.value})}
-                    className="w-auto rounded-full text-xs text-zinc-600 px-3 py-1 border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      id="due_date"
+                      value={editedTask?.due_date ? editedTask.due_date.slice(0, 10) : 
+                             selectedTask.due_date ? selectedTask.due_date.slice(0, 10) : getCurrentDate().slice(0, 10)}
+                      onChange={(e) => {
+                        const dateValue = e.target.value;
+                        const timeValue = editedTask?.due_date?.slice(11, 16) || selectedTask.due_date?.slice(11, 16) || '23:59';
+                        setEditedTask(prev => prev ? {...prev, due_date: `${dateValue}T${timeValue}`} : {...selectedTask, due_date: `${dateValue}T${timeValue}`});
+                      }}
+                      className="w-auto rounded-full text-xs text-zinc-600 px-3 py-1 border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <input
+                      type="time"
+                      id="due_time"
+                      value={editedTask?.due_date?.slice(11, 16) || selectedTask.due_date?.slice(11, 16) || ''}
+                      onChange={(e) => {
+                        const timeValue = e.target.value;
+                        const dateValue = editedTask?.due_date?.slice(0, 10) || selectedTask.due_date?.slice(0, 10) || getCurrentDate();
+                        setEditedTask(prev => prev ? {...prev, due_date: `${dateValue}T${timeValue || '23:59'}`} : {...selectedTask, due_date: `${dateValue}T${timeValue || '23:59'}`});
+                      }}
+                      className="w-auto rounded-full text-xs text-zinc-600 px-3 py-1 border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
               </div>
             </div>

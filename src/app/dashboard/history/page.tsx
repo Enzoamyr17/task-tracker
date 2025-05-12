@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
+import { formatDate } from '@/utils/date';
 
 interface Task {
   id: string;
@@ -174,9 +175,9 @@ export default function HistoryPage() {
                 <p className="text-sm text-zinc-600 mb-2">{task.description}</p>
               )}
               <div className="flex items-center gap-4 text-xs text-zinc-500">
-                <span>Completed: {new Date(task.date_created).toLocaleDateString()}</span>
+                <span>Completed: {formatDate(task.date_created)}</span>
                 {task.due_date && (
-                  <span>Due: {new Date(task.due_date).toLocaleDateString()}</span>
+                  <span>Due: {formatDate(task.due_date)}</span>
                 )}
               </div>
             </div>
