@@ -30,12 +30,12 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
   const supabase = createClient();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [showOpenButton, setShowOpenButton] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [newProject, setNewProject] = useState({ name: '', description: '' });
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -120,7 +120,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
 
       if (insertError) throw new Error('Failed to add project: ' + insertError.message);
 
-      setIsModalOpen(false);
+      setIsProjectModalOpen(false);
       setNewProject({ name: '', description: '' });
       await fetchProjects();
     } catch (err) {
@@ -227,7 +227,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wider">Projects</h2>
                   <button
-                    onClick={() => setIsModalOpen(true)}
+                    onClick={() => setIsProjectModalOpen(true)}
                     className="p-1 hover:bg-blue-50 rounded-lg transition-colors"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
@@ -291,13 +291,13 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         </main>
 
         {/* Add Project Modal */}
-        {isModalOpen && (
+        {isProjectModalOpen && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 w-full max-w-md">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold text-zinc-800">Add New Project</h2>
                 <button 
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => setIsProjectModalOpen(false)}
                   className="text-zinc-500 hover:text-zinc-700"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -330,7 +330,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                 <div className="flex justify-end gap-3 mt-6">
                   <button
                     type="button"
-                    onClick={() => setIsModalOpen(false)}
+                    onClick={() => setIsProjectModalOpen(false)}
                     className="px-4 py-2 text-zinc-700 hover:bg-zinc-100 rounded-lg transition-colors"
                   >
                     Cancel

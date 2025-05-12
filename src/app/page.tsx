@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 
@@ -13,9 +13,17 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
-  // Check if user is logged in (client-side only for now)
-  // In production, use server-side check and redirect
-  // For demo, just show the form
+  // Check for existing session
+  useEffect(() => {
+    const checkSession = async () => {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        window.location.href = '/dashboard';
+      }
+    };
+    checkSession();
+  }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
