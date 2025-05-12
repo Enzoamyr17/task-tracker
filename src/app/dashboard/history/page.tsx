@@ -109,7 +109,7 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="space-y-6 p-8">
+    <div className="p-8 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-zinc-800">Completed Tasks</h1>
       </div>

@@ -26,17 +26,17 @@ interface Project {
 
 type NewTask = Omit<Task, 'id' | 'date_created' | 'user_id'>;
 
+const getCurrentDate = () => {
+  const today = new Date();
+  return today.toISOString().split('T')[0];
+};
+
 export default function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams.get('project');
   const [isScrolled, setIsScrolled] = useState(false);
-
-  const getCurrentDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-  };
-
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -53,31 +53,29 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [editedTask, setEditedTask] = useState<Task | null>(null);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const supabase = createClient();
 
   useEffect(() => {
-    if (projectId) {
-      fetchProjectDetails();
-      // Prefill project_id when opening modal from project view
-      setNewTask(prev => ({
-        ...prev,
-        project_id: projectId,
-        due_date: getCurrentDate()
-      }));
-    }
-    fetchTasks();
-  }, [projectId]);
-
-  useEffect(() => {
     const checkAuth = async () => {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        console.error('Auth error:', sessionError);
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        if (!session) {
+          router.push('/');
+          return;
+        }
+        setIsAuthenticated(true);
+        await Promise.all([
+          fetchTasks(),
+          projectId ? fetchProjectDetails() : Promise.resolve()
+        ]);
+      } catch (err) {
+        console.error('Auth error:', err);
+        setError(err instanceof Error ? err.message : 'Authentication failed');
         router.push('/');
-        return;
       }
-      await fetchTasks();
     };
 
     checkAuth();
@@ -87,19 +85,16 @@ export default function DashboardPage() {
       .channel('tasks_changes')
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'tasks' },
-        async (payload) => {
-          console.log('Change received!', payload);
+        async () => {
           await fetchTasks();
         }
       )
-      .subscribe((status) => {
-        console.log('Subscription status:', status);
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -404,6 +399,14 @@ export default function DashboardPage() {
     }
   };
 
+  if (!isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-zinc-600">Authenticating...</div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -422,7 +425,7 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col">
-      <div className={`sticky top-0 w-full h-full py-6 px-10 z-50 transition-shadow duration-200 ${isScrolled ? 'shadow-xl bg-zinc-100' : ''}`}>
+      <div className={`sticky top-0 w-full h-full py-6 px-10 z-40 transition-shadow duration-200 ${isScrolled ? 'shadow-xl bg-zinc-100' : ''} ${isSidebarOpen ? 'pl-20' : ''}`}>
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-zinc-800">
