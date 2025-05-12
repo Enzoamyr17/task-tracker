@@ -1,15 +1,10 @@
 [build]
   command = "npm install && npm run build"
-  publish = ".next"
+  publish = ".next/static"
   environment = { NODE_VERSION = "18" }
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
-
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
 
 [[scheduled_functions]]
   path = "/api/cleanup"
