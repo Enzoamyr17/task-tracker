@@ -114,6 +114,14 @@ export default function HistoryPage() {
         <h1 className="text-2xl font-bold text-zinc-800">Completed Tasks</h1>
       </div>
 
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-zinc-800 mb-2">Task History</h2>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-700">
+          <p className="font-medium mb-1">Note about task cleanup:</p>
+          <p>Completed tasks that are older than 30 days will be automatically deleted to keep your task history clean and efficient.</p>
+        </div>
+      </div>
+
       <div className="grid gap-4">
         {tasks.length === 0 ? (
           <div className="text-zinc-500 text-center py-8">No completed tasks yet</div>

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { SidebarContext } from './layout';
 
 interface Task {
   id: string;
@@ -31,12 +32,12 @@ const getCurrentDate = () => {
   return today.toISOString().split('T')[0];
 };
 
-function DashboardContent() {
+export default function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams.get('project');
+  const { isSidebarOpen } = useContext(SidebarContext);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -425,8 +426,8 @@ function DashboardContent() {
 
   return (
     <div className="flex flex-col">
-      <div className={`sticky top-0 w-full h-full py-6 px-10 z-40 transition-shadow duration-200 ${isScrolled ? 'shadow-xl bg-zinc-100' : ''} ${isSidebarOpen ? 'pl-20' : ''}`}>
-        <div className="flex justify-between items-center">
+      <div className={`sticky top-0 w-full h-full py-6 px-10 z-40 transition-shadow duration-200 ${isScrolled ? 'shadow-xl bg-zinc-100' : ''} ${!isSidebarOpen ? '' : ''}`}>
+        <div className={`flex justify-between items-center pt-14 xl:pt-0`}>
           <div>
             <h1 className="text-2xl font-bold text-zinc-800">
               {currentProject ? currentProject.name : 'Tasks'}
@@ -437,7 +438,7 @@ function DashboardContent() {
           </div>
           <button 
             onClick={() => setIsModalOpen(true)}
-            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
+            className={`bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 w-[140px] justify-center ${isSidebarOpen ? 'hidden md:flex' : ''}`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
@@ -629,8 +630,8 @@ function DashboardContent() {
         </div>
       )}
 
-      <div className="flex gap-6 p-8">
-        <section className="w-1/3 bg-card rounded-xl shadow-xl p-4">
+      <div className="flex flex-col md:flex-row gap-6 p-8">
+        <section className="w-full md:w-1/3 bg-card rounded-xl shadow-xl p-4">
           <h3 className="text-lg font-bold mb-4 text-blue-600">Today</h3>
           {today.length === 0 ? (
             <div className="text-zinc-500 text-sm">No tasks for today</div>
@@ -638,7 +639,7 @@ function DashboardContent() {
             today.map(task => <TaskCard key={task.id} task={task} />)
           )}
         </section>
-        <section className="w-1/3 bg-card rounded-xl shadow-xl p-4">
+        <section className="w-full md:w-1/3 bg-card rounded-xl shadow-xl p-4">
           <h3 className="text-lg font-bold mb-4 text-green-600">Upcoming</h3>
           {upcoming.length === 0 ? (
             <div className="text-zinc-500 text-sm">No upcoming tasks</div>
@@ -646,7 +647,7 @@ function DashboardContent() {
             upcoming.map(task => <TaskCard key={task.id} task={task} />)
           )}
         </section>
-        <section className="w-1/3 bg-card rounded-xl shadow-xl p-4">
+        <section className="w-full md:w-1/3 bg-card rounded-xl shadow-xl p-4">
           <h3 className="text-lg font-bold mb-4 text-red-600">Overdue</h3>
           {overdue.length === 0 ? (
             <div className="text-zinc-500 text-sm">No overdue tasks</div>
@@ -656,15 +657,5 @@ function DashboardContent() {
         </section>
       </div>
     </div>
-  );
-}
-
-export default function DashboardPage() {
-  return (
-    <Suspense fallback={<div className="flex items-center justify-center h-full">
-      <div className="text-zinc-600">Loading...</div>
-    </div>}>
-      <DashboardContent />
-    </Suspense>
   );
 } 
