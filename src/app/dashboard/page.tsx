@@ -17,6 +17,10 @@ interface Task {
   user_id: string;
   priority: 'low' | 'medium' | 'high';
   is_completed: boolean;
+  is_recurring: boolean;
+  recurrence_pattern: 'daily' | 'weekly' | 'monthly' | 'yearly' | null;
+  recurrence_end_date: string | null;
+  parent_task_id: string | null;
   projects?: {
     name: string;
   } | null;
@@ -50,10 +54,14 @@ export default function DashboardPage() {
   const [newTask, setNewTask] = useState<NewTask>({
     task: '',
     description: '',
-    due_date: `${getCurrentDateTime()}T23:59`,
+    due_date: `${getCurrentDate()}T23:59`,
     project_id: null,
     priority: 'medium',
-    is_completed: false
+    is_completed: false,
+    is_recurring: false,
+    recurrence_pattern: null,
+    recurrence_end_date: null,
+    parent_task_id: null
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -225,24 +233,22 @@ export default function DashboardPage() {
         throw new Error('No user found');
       }
 
-      // Ensure due_date has 23:59 if no time is specified
-      const taskToSubmit = {
-        ...newTask,
-        due_date: newTask.due_date?.includes('T') ? newTask.due_date : `${newTask.due_date}T23:59`,
-        user_id: user.id
-      };
-
-      const { data, error: insertError } = await supabase
+      // Create only the main task
+      const { data: mainTask, error: insertError } = await supabase
         .from('tasks')
-        .insert([taskToSubmit])
-        .select();
+        .insert([{
+          ...newTask,
+          user_id: user.id
+        }])
+        .select()
+        .single();
 
       if (insertError) {
         console.error('Insert error:', insertError);
         throw new Error('Failed to add task: ' + insertError.message);
       }
 
-      console.log('Task added successfully:', data);
+      console.log('Task added successfully:', mainTask);
       setIsModalOpen(false);
       setNewTask({ 
         task: '', 
@@ -250,7 +256,11 @@ export default function DashboardPage() {
         due_date: `${getCurrentDate()}T23:59`,
         project_id: null,
         priority: 'medium',
-        is_completed: false
+        is_completed: false,
+        is_recurring: false,
+        recurrence_pattern: null,
+        recurrence_end_date: null,
+        parent_task_id: null
       });
       setHasSelectedTime(false);
       
@@ -262,8 +272,56 @@ export default function DashboardPage() {
     }
   };
 
+  // Helper function to calculate the next due date
+  const calculateNextDueDate = (
+    currentDueDate: string,
+    pattern: 'daily' | 'weekly' | 'monthly' | 'yearly',
+    endDate: string | null
+  ): string | null => {
+    const current = new Date(currentDueDate);
+    const end = endDate ? new Date(endDate) : null;
+    
+    if (end && current >= end) {
+      return null;
+    }
+
+    const next = new Date(current);
+    switch (pattern) {
+      case 'daily':
+        next.setDate(next.getDate() + 1);
+        break;
+      case 'weekly':
+        next.setDate(next.getDate() + 7);
+        break;
+      case 'monthly':
+        next.setMonth(next.getMonth() + 1);
+        break;
+      case 'yearly':
+        next.setFullYear(next.getFullYear() + 1);
+        break;
+    }
+
+    if (end && next > end) {
+      return null;
+    }
+
+    return next.toISOString();
+  };
+
   const handleTaskComplete = async (taskId: string, completed: boolean) => {
     try {
+      // First, get the task details to check if it's recurring
+      const { data: task, error: fetchError } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('id', taskId)
+        .single();
+
+      if (fetchError) {
+        throw new Error('Failed to fetch task: ' + fetchError.message);
+      }
+
+      // Update the task completion status
       const { error: updateError } = await supabase
         .from('tasks')
         .update({
@@ -275,12 +333,49 @@ export default function DashboardPage() {
         throw new Error('Failed to update task: ' + updateError.message);
       }
 
+      // If the task is being completed and is recurring, create the next occurrence
+      if (completed && task.is_recurring && task.recurrence_pattern) {
+        const nextDueDate = calculateNextDueDate(
+          task.due_date!,
+          task.recurrence_pattern,
+          task.recurrence_end_date
+        );
+
+        if (nextDueDate) {
+          const { error: recurringError } = await supabase
+            .from('tasks')
+            .insert([{
+              task: task.task,
+              description: task.description,
+              due_date: nextDueDate,
+              project_id: task.project_id,
+              priority: task.priority,
+              is_completed: false,
+              is_recurring: true,
+              recurrence_pattern: task.recurrence_pattern,
+              recurrence_end_date: task.recurrence_end_date,
+              parent_task_id: taskId,
+              user_id: task.user_id
+            }]);
+
+          if (recurringError) {
+            console.error('Recurring task error:', recurringError);
+            // Don't throw here, as the main task was completed successfully
+          }
+        }
+      }
+
       // Update the task in the local state
-      setTasks(tasks.map(task => 
-        task.id === taskId 
-          ? { ...task, is_completed: completed }
-          : task
+      setTasks(tasks.map(t => 
+        t.id === taskId 
+          ? { ...t, is_completed: completed }
+          : t
       ));
+
+      // Refresh tasks to show the new recurring task if one was created
+      if (completed && task.is_recurring) {
+        await fetchTasks();
+      }
     } catch (err) {
       console.error('Error updating task:', err);
       setError(err instanceof Error ? err.message : 'An error occurred while updating task');
@@ -389,14 +484,25 @@ export default function DashboardPage() {
         )}
         {task.due_date && (
           <div className="text-xs text-zinc-500 mt-auto">
-            Due: {new Date(task.due_date).toLocaleString('en-US', {
+            <div>Due: {new Date(task.due_date).toLocaleString('en-US', {
               year: 'numeric',
               month: 'short',
               day: 'numeric',
               hour: '2-digit',
               minute: '2-digit',
               hour12: true
-            })}
+            })}</div>
+            {task.is_recurring && task.recurrence_pattern && (
+              <div className="flex items-center gap-1 mt-1">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                </svg>
+                <span>Repeats {task.recurrence_pattern}</span>
+                {task.recurrence_end_date && (
+                  <span>until {new Date(task.recurrence_end_date).toLocaleDateString()}</span>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -500,7 +606,11 @@ export default function DashboardPage() {
                 due_date: `${getCurrentDate()}T23:59`,
                 project_id: projectId || null,
                 priority: 'medium',
-                is_completed: false
+                is_completed: false,
+                is_recurring: false,
+                recurrence_pattern: null,
+                recurrence_end_date: null,
+                parent_task_id: null
               });
               setIsModalOpen(true);
             }}
@@ -624,6 +734,53 @@ export default function DashboardPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="is_recurring"
+                    checked={newTask.is_recurring}
+                    onChange={(e) => setNewTask({ ...newTask, is_recurring: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 border-zinc-300 rounded focus:ring-blue-500"
+                  />
+                  <label htmlFor="is_recurring" className="text-sm font-medium text-zinc-700">
+                    Make this a recurring task
+                  </label>
+                </div>
+                {newTask.is_recurring && (
+                  <div className="space-y-4 pl-6 border-l-2 border-zinc-200">
+                    <div>
+                      <label htmlFor="recurrence_pattern" className="block text-sm font-medium text-zinc-700 mb-1">
+                        Repeat every
+                      </label>
+                      <select
+                        id="recurrence_pattern"
+                        value={newTask.recurrence_pattern || ''}
+                        onChange={(e) => setNewTask({ ...newTask, recurrence_pattern: e.target.value as 'daily' | 'weekly' | 'monthly' | 'yearly' | null })}
+                        className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select frequency</option>
+                        <option value="daily">Day</option>
+                        <option value="weekly">Week</option>
+                        <option value="monthly">Month</option>
+                        <option value="yearly">Year</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="recurrence_end_date" className="block text-sm font-medium text-zinc-700 mb-1">
+                        End date (optional)
+                      </label>
+                      <input
+                        type="date"
+                        id="recurrence_end_date"
+                        value={newTask.recurrence_end_date?.slice(0, 10) || ''}
+                        onChange={(e) => setNewTask({ ...newTask, recurrence_end_date: e.target.value ? `${e.target.value}T23:59` : null })}
+                        className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
               {projectId && (
                 <input
