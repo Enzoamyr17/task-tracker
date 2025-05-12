@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, createContext, useContext, Suspense } from 'react';
 import Link from 'next/link';
 
 interface Project {
@@ -24,7 +24,7 @@ export const SidebarContext = createContext<SidebarContextType>({
   setIsSidebarOpen: () => {},
 });
 
-function DashboardLayoutClient({ children }: { children: React.ReactNode }) {
+function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -309,5 +309,11 @@ function DashboardLayoutClient({ children }: { children: React.ReactNode }) {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return <DashboardLayoutClient>{children}</DashboardLayoutClient>;
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen">
+      <div className="text-zinc-600">Loading...</div>
+    </div>}>
+      <DashboardLayoutContent>{children}</DashboardLayoutContent>
+    </Suspense>
+  );
 } 
