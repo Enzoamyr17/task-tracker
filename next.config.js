@@ -9,10 +9,6 @@ const nextConfig = {
   output: 'standalone',
   poweredByHeader: false,
   compress: true,
-  experimental: {
-    optimizeCss: true,
-    optimizePackageImports: ['@supabase/supabase-js', 'react', 'react-dom'],
-  },
   webpack: (config, { dev, isServer }) => {
     // Optimize chunk loading
     if (!dev && !isServer) {
