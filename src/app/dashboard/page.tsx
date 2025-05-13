@@ -7,6 +7,8 @@ import { SidebarContext } from './layout';
 import NotificationSettings from '@/components/NotificationSettings';
 import { formatDate, formatDateOnly, getCurrentDateTime, isOverdue, isDueToday } from '@/utils/date';
 
+// ... existing code ...
+
 interface Task {
   id: string;
   task: string;
