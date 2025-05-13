@@ -4,25 +4,11 @@ import { useState, useEffect, useContext } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SidebarContext } from './layout';
+import TaskViewModal from '@/components/TaskViewModal';
+import { Task } from '@/types/task';
 import NotificationSettings from '@/components/NotificationSettings';
 import { formatDate, formatDateOnly, getCurrentDateTime, isOverdue, isDueToday } from '@/utils/date';
-
-// ... existing code ...
-
-interface Task {
-  id: string;
-  task: string;
-  description: string | null;
-  due_date: string | null;
-  date_created: string;
-  project_id: string | null;
-  user_id: string;
-  priority: 'low' | 'medium' | 'high';
-  is_completed: boolean;
-  projects?: {
-    name: string;
-  } | null;
-}
+import AddTaskModal from '@/components/AddTaskModal';
 
 interface Project {
   id: string;
@@ -52,10 +38,15 @@ export default function DashboardPage() {
   const [newTask, setNewTask] = useState<NewTask>({
     task: '',
     description: '',
-    due_date: `${getCurrentDateTime()}T23:59`,
+    due_date: `${getCurrentDate()}T23:59`,
+    start_time: null,
+    end_time: null,
     project_id: null,
     priority: 'medium',
-    is_completed: false
+    is_completed: false,
+    is_recurring: false,
+    recurrence_pattern: null,
+    recurrence_end_date: null
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +55,7 @@ export default function DashboardPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [hasSelectedTime, setHasSelectedTime] = useState(false);
+  const [hasTimeTracking, setHasTimeTracking] = useState(false);
 
   const supabase = createClient();
 
@@ -252,9 +244,15 @@ export default function DashboardPage() {
         due_date: `${getCurrentDate()}T23:59`,
         project_id: null,
         priority: 'medium',
-        is_completed: false
+        is_completed: false,
+        start_time: null,
+        end_time: null,
+        is_recurring: false,
+        recurrence_pattern: null,
+        recurrence_end_date: null
       });
       setHasSelectedTime(false);
+      setHasTimeTracking(false);
       
       // Refresh tasks immediately after adding
       await fetchTasks();
@@ -458,6 +456,67 @@ export default function DashboardPage() {
     }
   };
 
+  const handleAddTask = async (task: NewTask) => {
+    try {
+      setError(null);
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) {
+        console.error('User error:', userError);
+        throw new Error('Failed to get user: ' + userError.message);
+      }
+      
+      if (!user) {
+        console.error('No user found');
+        throw new Error('No user found');
+      }
+
+      console.log('Task to submit:', task);
+      // Ensure due_date is correctly formatted
+      const datePart = task.due_date?.slice(0, 10);
+      const timePart = task.due_date?.slice(11) || '23:59';
+      const taskToSubmit = {
+        ...task,
+        due_date: `${datePart}T${timePart}`,
+        user_id: user.id
+      };
+
+      const { data, error: insertError } = await supabase
+        .from('tasks')
+        .insert([taskToSubmit])
+        .select();
+
+      if (insertError) {
+        console.error('Insert error:', insertError);
+        throw new Error('Failed to add task: ' + insertError.message);
+      }
+
+      console.log('Task added successfully:', data);
+      setIsModalOpen(false);
+      setNewTask({ 
+        task: '', 
+        description: '', 
+        due_date: `${getCurrentDate()}T23:59`,
+        project_id: null,
+        priority: 'medium',
+        is_completed: false,
+        start_time: null,
+        end_time: null,
+        is_recurring: false,
+        recurrence_pattern: null,
+        recurrence_end_date: null
+      });
+      setHasSelectedTime(false);
+      setHasTimeTracking(false);
+      
+      // Refresh tasks immediately after adding
+      await fetchTasks();
+    } catch (err) {
+      console.error('Error in handleAddTask:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred while adding task');
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -502,7 +561,12 @@ export default function DashboardPage() {
                 due_date: `${getCurrentDate()}T23:59`,
                 project_id: projectId || null,
                 priority: 'medium',
-                is_completed: false
+                is_completed: false,
+                start_time: null,
+                end_time: null,
+                is_recurring: false,
+                recurrence_pattern: null,
+                recurrence_end_date: null
               });
               setIsModalOpen(true);
             }}
@@ -517,249 +581,29 @@ export default function DashboardPage() {
       </div>
 
       {/* Add Task Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-zinc-800">Add New Task</h2>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="text-zinc-500 hover:text-zinc-700"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label htmlFor="task" className="block text-sm font-medium text-zinc-700 mb-1">
-                  Task Name
-                </label>
-                <input
-                  type="text"
-                  id="task"
-                  value={newTask.task}
-                  onChange={(e) => setNewTask({ ...newTask, task: e.target.value })}
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="description" className="block text-sm font-medium text-zinc-700 mb-1">
-                  Description
-                </label>
-                <textarea
-                  id="description"
-                  value={newTask.description || ''}
-                  onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows={3}
-                />
-              </div>
-              <div>
-                <div className="flex gap-2">
-                  <div className="m-auto w-1/2">
-                    <label htmlFor="due_date" className="block text-sm font-medium text-zinc-700 mb-1">
-                      Due Date
-                    </label>
-                    <input
-                      type="date"
-                      id="due_date"
-                      value={newTask.due_date ? newTask.due_date.slice(0, 10) : getCurrentDate()}
-                      onChange={(e) => {
-                        const dateValue = e.target.value;
-                        setNewTask({ ...newTask, due_date: `${dateValue}T23:59` });
-                      }}
-                      className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div className="m-auto w-1/2">
-                    <label htmlFor="due_time" className="block text-sm font-medium text-zinc-700 mb-1">
-                      Due Time (Optional)
-                    </label>
-                    <input
-                      type="time"
-                      id="due_time"
-                      value={hasSelectedTime ? newTask.due_date?.slice(11, 16) : ''}
-                      onChange={(e) => {
-                        const timeValue = e.target.value;
-                        const dateValue = newTask.due_date?.slice(0, 10) || getCurrentDate();
-                        setNewTask({ ...newTask, due_date: `${dateValue}T${timeValue || '23:59'}` });
-                        setHasSelectedTime(!!timeValue);
-                      }}
-                      className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-                
-              </div>
-              <div>
-                <label htmlFor="priority" className="block text-sm font-medium text-zinc-700 mb-1">
-                  Priority
-                </label>
-                <select
-                  id="priority"
-                  value={newTask.priority}
-                  onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as 'low' | 'medium' | 'high' })}
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="project" className="block text-sm font-medium text-zinc-700 mb-1">
-                  Project
-                </label>
-                <select
-                  id="project"
-                  value={newTask.project_id || ''}
-                  onChange={(e) => setNewTask({ ...newTask, project_id: e.target.value || null })}
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">No Project</option>
-                  {projects.map(project => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {projectId && (
-                <input
-                  type="hidden"
-                  value={projectId}
-                  onChange={(e) => setNewTask({ ...newTask, project_id: e.target.value })}
-                />
-              )}
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-zinc-700 hover:bg-zinc-100 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Add Task
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <AddTaskModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleAddTask}
+        projects={projects}
+        projectId={projectId}
+      />
 
       {/* View Task Modal */}
-      {isViewModalOpen && selectedTask && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-          onClick={() => {
+      {selectedTask && (
+        <TaskViewModal
+          task={selectedTask}
+          isOpen={isViewModalOpen}
+          onClose={() => {
             setIsViewModalOpen(false);
             setSelectedTask(null);
-            setEditedTask(null);
           }}
-        >
-          <div 
-            className="bg-white rounded-lg p-6 w-full max-w-md"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-zinc-800">{selectedTask.task}</h2>
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => {
-                    if (window.confirm('Are you sure you want to delete this task?')) {
-                      handleDelete(selectedTask.id);
-                    }
-                  }}
-                  className="text-red-600 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                </button>
-                <button 
-                  onClick={() => {
-                    setIsViewModalOpen(false);
-                    setSelectedTask(null);
-                    setEditedTask(null);
-                  }}
-                  className="text-zinc-500 hover:text-zinc-700"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <select
-                  id="priority"
-                  value={editedTask?.priority || selectedTask.priority}
-                  onChange={(e) => setEditedTask(prev => prev ? {...prev, priority: e.target.value as 'low' | 'medium' | 'high'} : {...selectedTask, priority: e.target.value as 'low' | 'medium' | 'high'})}
-                  className={`w-auto rounded-full text-xs font-medium px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    (editedTask?.priority || selectedTask.priority) === 'high' ? 'bg-red-100 text-red-700 border-red-200' :
-                    (editedTask?.priority || selectedTask.priority) === 'medium' ? 'bg-yellow-100 text-yellow-700 border-yellow-200' :
-                    'bg-green-100 text-green-700 border-green-200'
-                  }`}
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                </select>
-              </div>
-              
-              {selectedTask.description && (
-                <div>
-                  <p className="text-zinc-600 whitespace-pre-wrap">{selectedTask.description}</p>
-                </div>
-              )}
-
-              <div className="flex items-center gap-4 text-sm text-zinc-600">
-                <div className='m-auto'>
-                  <span className="font-medium text-zinc-700">Created: </span>
-                  {formatDate(selectedTask.date_created)}
-                </div>
-                <div className='m-auto'>
-                  <label htmlFor="due_date" className="font-medium text-zinc-700">Due: </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="date"
-                      id="due_date"
-                      value={editedTask?.due_date ? editedTask.due_date.slice(0, 10) : 
-                             selectedTask.due_date ? selectedTask.due_date.slice(0, 10) : getCurrentDate().slice(0, 10)}
-                      onChange={(e) => {
-                        const dateValue = e.target.value;
-                        const timeValue = editedTask?.due_date?.slice(11, 16) || selectedTask.due_date?.slice(11, 16) || '23:59';
-                        setEditedTask(prev => prev ? {...prev, due_date: `${dateValue}T${timeValue}`} : {...selectedTask, due_date: `${dateValue}T${timeValue}`});
-                      }}
-                      className="w-auto rounded-full text-xs text-zinc-600 px-3 py-1 border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <input
-                      type="time"
-                      id="due_time"
-                      value={editedTask?.due_date?.slice(11, 16) || selectedTask.due_date?.slice(11, 16) || ''}
-                      onChange={(e) => {
-                        const timeValue = e.target.value;
-                        const dateValue = editedTask?.due_date?.slice(0, 10) || selectedTask.due_date?.slice(0, 10) || getCurrentDate();
-                        setEditedTask(prev => prev ? {...prev, due_date: `${dateValue}T${timeValue || '23:59'}`} : {...selectedTask, due_date: `${dateValue}T${timeValue || '23:59'}`});
-                      }}
-                      className="w-auto rounded-full text-xs text-zinc-600 px-3 py-1 border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+          onDelete={handleDelete}
+        />
       )}
 
+
+      {/* Sections */}
       <div className="flex flex-col md:flex-row gap-6 p-8">
         <section className="w-full md:w-1/3 bg-card rounded-xl shadow-xl p-4">
           <h3 className="text-lg font-bold mb-4 text-blue-600">Today</h3>

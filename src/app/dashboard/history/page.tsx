@@ -111,11 +111,8 @@ export default function HistoryPage() {
 
   return (
     <div className="p-8 space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-zinc-800">Completed Tasks</h1>
-      </div>
 
-      <div className="mb-8">
+      <div className="mb-8 pt-14">
         <h2 className="text-2xl font-bold text-zinc-800 mb-2">Task History</h2>
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-700">
           <p className="font-medium mb-1">Note about task cleanup:</p>

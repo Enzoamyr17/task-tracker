@@ -160,6 +160,8 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   return (
     <SidebarContext.Provider value={{ isSidebarOpen, setIsSidebarOpen }}>
       <div className="flex h-screen bg-zinc-50">
+
+        {/* dashboard sidebar button */}
         {!isSidebarOpen && showOpenButton && (
           <button
             onClick={() => setIsSidebarOpen(true)}
@@ -178,6 +180,8 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             </svg>
           </button>
         )}
+
+        {/* dashboard sidebar */}
         <aside className={`fixed top-0 left-0 h-full w-64 bg-white shadow-lg transition-transform duration-300 ease-in-out ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } xl:translate-x-0`}>
@@ -204,22 +208,42 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
               <div>
                 <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wider mb-2">Navigation</h2>
                 <div className="flex flex-col space-y-1">
-                  <a 
-                    href="/dashboard" 
-                    className={`px-4 py-2 rounded font-semibold ${
-                      pathname === '/dashboard' && !searchParams.get('project') ? 'bg-blue-500 text-white' : ''
+                  <Link 
+                    href="/dashboard"
+                    className={`flex items-center gap-2 px-4 py-2 text-zinc-600 hover:bg-zinc-100 rounded-lg ${
+                      pathname === '/dashboard' ? 'bg-zinc-100' : ''
                     }`}
                   >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                    </svg>
                     Tasks
-                  </a>
-                  <a 
-                    href="/dashboard/history" 
-                    className={`px-4 py-2 rounded font-semibold ${
-                      pathname === '/dashboard/history' ? 'bg-blue-500 text-white' : ''
+                  </Link>
+
+                  <Link 
+                    href="/dashboard/calendar"
+                    className={`flex items-center gap-2 px-4 py-2 text-zinc-600 hover:bg-zinc-100 rounded-lg ${
+                      pathname === '/dashboard/calendar' ? 'bg-zinc-100' : ''
                     }`}
                   >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                    </svg>
+                    Calendar
+                  </Link>
+
+                  <Link 
+                    href="/dashboard/history"
+                    className={`flex items-center gap-2 px-4 py-2 text-zinc-600 hover:bg-zinc-100 rounded-lg ${
+                      pathname === '/dashboard/history' ? 'bg-zinc-100' : ''
+                    }`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                    </svg>
                     History
-                  </a>
+                  </Link>
+
                   <a 
                     href="/dashboard/settings" 
                     className={`px-4 py-2 rounded font-semibold ${
@@ -251,28 +275,16 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                   ) : projects.length === 0 ? (
                     <div className="text-sm text-zinc-500">No projects yet</div>
                   ) : (
-                    projects.map(project => (
-                      <div key={project.id} className="group relative">
-                        <Link
-                          href={`/dashboard?project=${project.id}`}
-                          className={`block px-4 py-2 rounded font-semibold ${
-                            searchParams.get('project') === project.id ? 'bg-blue-500 text-white' : ''
-                          }`}
-                        >
-                          {project.name}
-                        </Link>
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            handleDeleteProject(project.id);
-                          }}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-50 rounded transition-all duration-200"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                        </button>
-                      </div>
+                    projects.map((project) => (
+                      <Link
+                        key={project.id}
+                        href={`/dashboard?project=${project.id}`}
+                        className={`group relative flex items-center px-4 py-2 rounded font-semibold ${
+                          searchParams.get('project') === project.id ? 'bg-blue-500 text-white' : ''
+                        }`}
+                      >
+                        <span className="truncate">{project.name}</span>
+                      </Link>
                     ))
                   )}
                 </div>
@@ -292,7 +304,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         </aside>
 
         {/* Main Content */}
-        <main className={`flex-1 transition-all duration-300 ${
+        <main className={`flex-1 transition-all duration-300 w-screen ${
           isSidebarOpen ? 'ml-64' : 'ml-0'
         } xl:ml-64`}>
           {children}
