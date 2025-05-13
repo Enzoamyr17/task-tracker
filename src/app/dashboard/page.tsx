@@ -5,10 +5,13 @@ import { createClient } from '@/utils/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SidebarContext } from './layout';
 import TaskViewModal from '@/components/TaskViewModal';
+import MotivationModal from '@/components/MotivationModal';
 import { Task } from '@/types/task';
 import NotificationSettings from '@/components/NotificationSettings';
 import { formatDate, formatDateOnly, getCurrentDateTime, isOverdue, isDueToday } from '@/utils/date';
 import AddTaskModal from '@/components/AddTaskModal';
+
+
 
 interface Project {
   id: string;
@@ -35,6 +38,8 @@ export default function DashboardPage() {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [isMotivationModalOpen, setIsMotivationModalOpen] = useState(false);
+
   const [newTask, setNewTask] = useState<NewTask>({
     task: '',
     description: '',
@@ -56,15 +61,19 @@ export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [hasSelectedTime, setHasSelectedTime] = useState(false);
   const [hasTimeTracking, setHasTimeTracking] = useState(false);
+  const [userID, setUserID] = useState<string | null>(null);
 
   const supabase = createClient();
+
+  
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
         setLoading(true);
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
+        setUserID(session?.user?.id ?? null);
+
         if (sessionError) {
           console.error('Session error:', sessionError);
           router.push('/');
@@ -288,7 +297,6 @@ export default function DashboardPage() {
   };
 
   const categorizeTasks = () => {
-    console.log('Categorizing tasks:', tasks);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -333,7 +341,6 @@ export default function DashboardPage() {
     categorized.today.sort(sortByPriority);
     categorized.upcoming.sort(sortByPriority);
 
-    console.log('Categorized and sorted tasks:', categorized);
     return categorized;
   };
 
@@ -361,6 +368,7 @@ export default function DashboardPage() {
           setIsViewModalOpen(true);
         }}
       >
+
         <div className="flex justify-between items-start mb-2 min-w-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <input
@@ -471,7 +479,6 @@ export default function DashboardPage() {
         throw new Error('No user found');
       }
 
-      console.log('Task to submit:', task);
       // Ensure due_date is correctly formatted
       const datePart = task.due_date?.slice(0, 10);
       const timePart = task.due_date?.slice(11) || '23:59';
@@ -491,7 +498,6 @@ export default function DashboardPage() {
         throw new Error('Failed to add task: ' + insertError.message);
       }
 
-      console.log('Task added successfully:', data);
       setIsModalOpen(false);
       setNewTask({ 
         task: '', 
@@ -541,8 +547,13 @@ export default function DashboardPage() {
     );
   }
 
+  // console.log('userID',userID);
+
   return (
     <div className="flex flex-col">
+
+      {userID === 'b0005c24-e717-4087-84c1-2dc7e99377d2' && <MotivationModal />}
+
       <div className={`sticky top-0 w-full h-full py-6 px-10 z-40 transition-shadow duration-200 ${isScrolled ? 'shadow-xl bg-zinc-100' : ''} ${!isSidebarOpen ? '' : ''}`}>
         <div className={`flex justify-between items-center pt-14 xl:pt-0`}>
           <div>
